@@ -5,6 +5,27 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { toast } from "@/hooks/use-toast";
 import { Mail, Phone, MapPin, Send } from "lucide-react";
+import { z } from "zod";
+
+// Validação do formulário
+const contactSchema = z.object({
+  name: z.string()
+    .trim()
+    .min(1, "Nome é obrigatório")
+    .max(100, "Nome deve ter no máximo 100 caracteres"),
+  email: z.string()
+    .trim()
+    .email("Email inválido")
+    .max(255, "Email deve ter no máximo 255 caracteres"),
+  phone: z.string()
+    .trim()
+    .min(1, "Telefone é obrigatório")
+    .max(20, "Telefone deve ter no máximo 20 caracteres"),
+  message: z.string()
+    .trim()
+    .min(1, "Mensagem é obrigatória")
+    .max(1000, "Mensagem deve ter no máximo 1000 caracteres")
+});
 
 const Contact = () => {
   const [formData, setFormData] = useState({
@@ -20,12 +41,19 @@ const Contact = () => {
     setIsSubmitting(true);
 
     try {
-      const response = await fetch("http://localhost:5678/webhook-test/ee4cf345-5126-4d66-87e6-d5566c90a2a9", {
+      // Validar dados do formulário
+      const validatedData = contactSchema.parse(formData);
+
+      // IMPORTANTE: Substitua esta URL pela URL pública do seu webhook
+      // localhost não funcionará em produção (Vercel)
+      const webhookUrl = "http://localhost:5678/webhook-test/ee4cf345-5126-4d66-87e6-d5566c90a2a9";
+      
+      const response = await fetch(webhookUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(validatedData),
       });
 
       if (response.ok) {
@@ -38,11 +66,22 @@ const Contact = () => {
         throw new Error("Erro ao enviar mensagem");
       }
     } catch (error) {
-      toast({
-        title: "Erro ao enviar mensagem",
-        description: "Por favor, tente novamente mais tarde.",
-        variant: "destructive",
-      });
+      if (error instanceof z.ZodError) {
+        // Erros de validação
+        const firstError = error.errors[0];
+        toast({
+          title: "Erro de validação",
+          description: firstError.message,
+          variant: "destructive",
+        });
+      } else {
+        // Erro de rede ou servidor
+        toast({
+          title: "Erro ao enviar mensagem",
+          description: "Verifique sua conexão e tente novamente. Em produção, certifique-se de que a URL do webhook está configurada corretamente.",
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsSubmitting(false);
     }
